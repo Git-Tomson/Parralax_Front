@@ -35,7 +35,8 @@ export default function ClusterDashboard() {
   const { data: stats, isLoading: statsLoading } = useClusterStats();
   const { data: nodesData, isLoading: nodesLoading, isError: nodesError, refetch } = useNodes(filters);
 
-  const nodes = nodesData?.nodes ?? nodesData?.items ?? [];
+  // nodesData = { items, total, page, per_page, pages } après unwrap
+  const nodes = nodesData?.items ?? [];
 
   return (
     <div>
@@ -46,12 +47,13 @@ export default function ClusterDashboard() {
           <div className="col-span-6 text-center py-4 text-gray-400 text-sm">Chargement des stats…</div>
         ) : (
           <>
-            <StatCard label="Nœuds actifs" value={stats?.actif ?? stats?.active} color="green" />
-            <StatCard label="Surchargés" value={stats?.surcharge ?? stats?.overloaded} color="orange" />
-            <StatCard label="En panne" value={stats?.en_panne ?? stats?.failed} color="red" />
-            <StatCard label="Maintenance" value={stats?.en_maintenance ?? stats?.maintenance} color="gray" />
-            <StatCard label="Tâches en cours" value={stats?.tasks_running ?? stats?.en_cours} color="black" />
-            <StatCard label="Tâches en attente" value={stats?.tasks_pending ?? stats?.en_attente} color="gray" />
+            {/* stats = { nodes: { total, actifs, surcharges, en_panne, en_maintenance }, tasks: { en_cours, en_attente } } */}
+            <StatCard label="Nœuds actifs" value={stats?.nodes?.actifs} color="green" />
+            <StatCard label="Surchargés" value={stats?.nodes?.surcharges} color="orange" />
+            <StatCard label="En panne" value={stats?.nodes?.en_panne} color="red" />
+            <StatCard label="Maintenance" value={stats?.nodes?.en_maintenance} color="gray" />
+            <StatCard label="Tâches en cours" value={stats?.tasks?.en_cours} color="black" />
+            <StatCard label="Tâches en attente" value={stats?.tasks?.en_attente} color="gray" />
           </>
         )}
       </div>
@@ -116,14 +118,14 @@ export default function ClusterDashboard() {
                 return (
                   <tr key={node.uuid} className="hover:bg-gray-50">
                     <td className="px-3 py-2 font-mono text-xs text-gray-500">{node.uuid?.slice(0, 6) ?? '—'}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{node.ip_address ?? '—'}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{node.ip ?? '—'}</td>
                     <td className="px-3 py-2">{node.hostname ?? '—'}</td>
                     <td className="px-3 py-2 capitalize">{node.role ?? '—'}</td>
                     <td className="px-3 py-2"><StatusBadge status={node.status} type="node" /></td>
-                    <td className="px-3 py-2"><MetricBar value={node.cpu_usage ?? 0} /></td>
-                    <td className="px-3 py-2"><MetricBar value={node.ram_usage ?? 0} /></td>
-                    <td className="px-3 py-2 text-center">{node.active_tasks ?? 0}</td>
-                    <td className="px-3 py-2 text-gray-500">{node.score?.toFixed(2) ?? '—'}</td>
+                    <td className="px-3 py-2"><MetricBar value={node.current_cpu_usage ?? 0} /></td>
+                    <td className="px-3 py-2"><MetricBar value={node.current_ram_usage ?? 0} /></td>
+                    <td className="px-3 py-2 text-center">{node.current_tasks_count ?? 0}</td>
+                    <td className="px-3 py-2 text-gray-500">{node.current_score?.toFixed(2) ?? '—'}</td>
                     <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">
                       {stale && <span title="Heartbeat tardif" className="mr-1">⚠️</span>}
                       {timeAgo(hb)}

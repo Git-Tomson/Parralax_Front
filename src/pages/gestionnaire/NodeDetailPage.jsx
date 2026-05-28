@@ -30,7 +30,8 @@ function InfoRow({ label, value }) {
 function ActiveTasksSection({ uuid }) {
   const [open, setOpen] = useState(false);
   const { data, isLoading } = useNodeTasks(uuid, 'en_cours');
-  const tasks = data?.tasks ?? data?.items ?? [];
+  // data est un tableau directement après unwrap du hook
+  const tasks = Array.isArray(data) ? data : [];
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -57,7 +58,7 @@ function ActiveTasksSection({ uuid }) {
               <tbody>
                 {tasks.map((t) => (
                   <tr key={t.id}>
-                    <td className="py-1 font-mono">{t.id}</td>
+                    <td className="py-1 font-mono">{t.id?.slice(0, 8)}…</td>
                     <td className="py-1">{t.function_name ?? '—'}</td>
                     <td className="py-1"><StatusBadge status={t.status} type="task" /></td>
                   </tr>
@@ -80,7 +81,8 @@ export default function NodeDetailPage() {
   const [showLongHistory, setShowLongHistory] = useState(false);
 
   const { data: node, isLoading, isError, refetch } = useNode(uuid);
-  const { data: heartbeatsData } = useNodeHeartbeats(uuid, showLongHistory ? 500 : 0);
+  // Charger l'historique long uniquement quand l'utilisateur le demande
+  const { data: heartbeatsData } = useNodeHeartbeats(uuid, 500, showLongHistory);
   const toggleMaintenance = useToggleMaintenance();
   const removeNode = useRemoveNode();
 
@@ -95,24 +97,33 @@ export default function NodeDetailPage() {
   }
 
   const n = node ?? {};
+  const profile = n.profile ?? {};
+
+  // Graphe court : 10 derniers heartbeats du détail nœud (recent_heartbeats)
   const recentHeartbeats = (n.recent_heartbeats ?? []).map((hb, i) => ({
     name: `HB-${i + 1}`,
     cpu: ((hb.cpu_usage ?? 0) * 100).toFixed(1),
     ram: ((hb.ram_usage ?? 0) * 100).toFixed(1),
   }));
-  const longHistory = (heartbeatsData?.heartbeats ?? []).map((hb, i) => ({
-    name: new Date(hb.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+
+  // Graphe long : historique complet (tableau après unwrap du hook)
+  const longHistory = (Array.isArray(heartbeatsData) ? heartbeatsData : []).map((hb) => ({
+    name: new Date(hb.received_at).toLocaleTimeString('fr-FR', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    }),
     cpu: ((hb.cpu_usage ?? 0) * 100).toFixed(1),
     ram: ((hb.ram_usage ?? 0) * 100).toFixed(1),
   }));
+
   const chartData = showLongHistory ? longHistory : recentHeartbeats;
 
   const handleMaintenance = async () => {
     setShowMaintModal(false);
+    const enable = n.status !== 'en_maintenance';
     try {
-      await toggleMaintenance.mutateAsync(uuid);
+      await toggleMaintenance.mutateAsync({ uuid, enable });
       addToast(
-        n.status === 'en_maintenance' ? 'Nœud réactivé.' : 'Nœud mis en maintenance.',
+        enable ? 'Nœud mis en maintenance.' : 'Nœud réactivé.',
         'success'
       );
     } catch {
@@ -162,49 +173,71 @@ export default function NodeDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        {/* Identité */}
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <h3 className="text-sm font-semibold mb-3 text-gray-700 uppercase tracking-wide">Identité</h3>
-          <InfoRow label="IP" value={n.ip_address} />
+          <InfoRow label="IP" value={n.ip} />
           <InfoRow label="Hostname" value={n.hostname} />
           <InfoRow label="Rôle" value={n.role} />
-          <InfoRow label="Enregistré le" value={n.registered_at ? new Date(n.registered_at).toLocaleString('fr-FR') : '—'} />
+          <InfoRow
+            label="Enregistré le"
+            value={n.registered_at ? new Date(n.registered_at).toLocaleString('fr-FR') : '—'}
+          />
         </div>
 
+        {/* Profil matériel — champs du modèle NodeProfile */}
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <h3 className="text-sm font-semibold mb-3 text-gray-700 uppercase tracking-wide">Profil matériel</h3>
-          <InfoRow label="CPU cores" value={n.hardware?.cpu_cores ?? n.cpu_cores} />
-          <InfoRow label="Fréquence" value={n.hardware?.cpu_freq ? `${n.hardware.cpu_freq} MHz` : n.cpu_freq ? `${n.cpu_freq} MHz` : '—'} />
-          <InfoRow label="Architecture" value={n.hardware?.architecture ?? n.architecture} />
-          <InfoRow label="RAM totale" value={n.hardware?.ram_total ? `${(n.hardware.ram_total / 1e9).toFixed(1)} Go` : n.ram_total ? `${(n.ram_total / 1e9).toFixed(1)} Go` : '—'} />
-          <InfoRow label="RAM disponible" value={n.hardware?.ram_available ? `${(n.hardware.ram_available / 1e9).toFixed(1)} Go` : '—'} />
-          <InfoRow label="Stockage" value={n.hardware?.disk_total ? `${(n.hardware.disk_total / 1e9).toFixed(0)} Go` : '—'} />
-          <InfoRow label="OS" value={n.hardware?.os ?? n.os_info} />
-          <InfoRow label="Latence réseau" value={n.network_latency_ms ? `${n.network_latency_ms} ms` : '—'} />
+          <InfoRow label="CPU cœurs" value={profile.cpu_cores} />
+          <InfoRow
+            label="Fréquence CPU"
+            value={profile.cpu_freq_mhz != null ? `${profile.cpu_freq_mhz} MHz` : null}
+          />
+          <InfoRow label="Architecture" value={profile.arch_cpu} />
+          <InfoRow
+            label="RAM totale"
+            value={profile.ram_total_mb != null ? `${profile.ram_total_mb} Mo` : null}
+          />
+          <InfoRow
+            label="RAM disponible"
+            value={profile.ram_available_mb != null ? `${profile.ram_available_mb} Mo` : null}
+          />
+          <InfoRow
+            label="Stockage"
+            value={profile.storage_total_gb != null ? `${profile.storage_total_gb} Go` : null}
+          />
+          <InfoRow label="OS" value={profile.os_info} />
+          <InfoRow
+            label="Latence réseau"
+            value={profile.network_latency_ms != null ? `${profile.network_latency_ms} ms` : null}
+          />
         </div>
       </div>
 
+      {/* Métriques temps réel */}
       <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
         <h3 className="text-sm font-semibold mb-3 text-gray-700 uppercase tracking-wide">Métriques temps réel</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <p className="text-xs text-gray-500 mb-1">CPU</p>
-            <MetricBar value={n.cpu_usage ?? 0} />
+            <MetricBar value={n.current_cpu_usage ?? 0} />
           </div>
           <div>
             <p className="text-xs text-gray-500 mb-1">RAM</p>
-            <MetricBar value={n.ram_usage ?? 0} />
+            <MetricBar value={n.current_ram_usage ?? 0} />
           </div>
           <div>
             <p className="text-xs text-gray-500 mb-1">Tâches actives</p>
-            <p className="text-lg font-bold">{n.active_tasks ?? 0}</p>
+            <p className="text-lg font-bold">{n.current_tasks_count ?? 0}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-1">Score</p>
-            <p className="text-lg font-bold">{n.score?.toFixed(3) ?? '—'}</p>
+            <p className="text-xs text-gray-500 mb-1">Score d'élection</p>
+            <p className="text-lg font-bold">{n.current_score?.toFixed(3) ?? '—'}</p>
           </div>
         </div>
       </div>
 
+      {/* Historique CPU / RAM */}
       <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Historique CPU / RAM</h3>
@@ -239,7 +272,7 @@ export default function NodeDetailPage() {
         message={
           n.status === 'en_maintenance'
             ? 'Le nœud sera réactivé et pourra recevoir de nouvelles tâches.'
-            : 'Le nœud sera mis en maintenance et ne recevra plus de nouvelles tâches.'
+            : 'Le nœud sera mis en maintenance. Ses tâches actives seront migrées.'
         }
         onConfirm={handleMaintenance}
         onCancel={() => setShowMaintModal(false)}
@@ -248,7 +281,7 @@ export default function NodeDetailPage() {
       <ConfirmModal
         isOpen={showRemoveModal}
         title="Retirer le nœud du cluster"
-        message="Cette action désenregistre le nœud. Il devra se réenregistrer pour rejoindre le cluster."
+        message="Cette action est irréversible. Le nœud devra se réenregistrer pour rejoindre le cluster."
         onConfirm={handleRemove}
         onCancel={() => setShowRemoveModal(false)}
       />

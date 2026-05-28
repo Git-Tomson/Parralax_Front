@@ -41,8 +41,9 @@ export default function ChercheurDashboard() {
     }
   };
 
-  const tasks = data?.tasks ?? data?.items ?? [];
-  const pagination = data?.pagination ?? {};
+  // data = { items, total, page, per_page, pages } après unwrap dans le hook
+  const tasks = data?.items ?? [];
+  const pagination = data ?? {};
 
   return (
     <div>
@@ -125,7 +126,7 @@ export default function ChercheurDashboard() {
                       ) : <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
-                      {task.created_at ? new Date(task.created_at).toLocaleDateString('fr-FR') : '—'}
+                      {task.uploaded_at ? new Date(task.uploaded_at).toLocaleDateString('fr-FR') : '—'}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">

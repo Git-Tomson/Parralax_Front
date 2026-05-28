@@ -7,11 +7,18 @@ import { useToast } from 'src/components/ui/Toast';
 
 const QUOTA_BYTES = 1_073_741_824; // 1 Go
 
+const ACCEPTED_EXTENSIONS =
+  '.py,.c,.cpp,.h,.hpp,.java,.sh,.f90,.f,.r,.R,.zip,.tar,.gz,.tgz';
+
 function formatBytes(b) {
   if (b == null) return '—';
   if (b < 1024) return `${b} B`;
-  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
-  return `${(b / 1048576).toFixed(1)} MB`;
+  if (b < 1048576) return `${(b / 1024).toFixed(1)} Ko`;
+  return `${(b / 1048576).toFixed(1)} Mo`;
+}
+
+function guessBaseName(filename) {
+  return filename.replace(/\.(py|c|cpp|h|hpp|java|sh|f90|f|r|zip|tar\.gz|tgz|gz)$/i, '');
 }
 
 export default function ImportPage() {
@@ -38,8 +45,7 @@ export default function ImportPage() {
   const onFileChange = (files) => {
     if (!files?.length) return;
     setValue('file', files, { shouldValidate: true });
-    const name = files[0].name.replace(/\.c$/i, '');
-    setValue('name', name);
+    setValue('name', guessBaseName(files[0].name));
   };
 
   const onSubmit = async (data) => {
@@ -50,21 +56,28 @@ export default function ImportPage() {
 
     try {
       const res = await importMutation.mutateAsync(fd);
-      const id = res.data?.id ?? res.data?.task_id;
+      const id = res.data?.data?.id;
       setCreatedId(id);
       addToast('Programme importé avec succès.', 'success');
     } catch (err) {
       const status = err.response?.status;
-      if (status === 413) addToast('Quota disque dépassé. Supprimez des programmes existants.', 'error');
-      else if (status === 422) addToast('Format de fichier invalide. Seuls les fichiers .c sont acceptés.', 'error');
-      else addToast('Erreur lors de l\'import.', 'error');
+      if (status === 413) {
+        addToast('Quota disque dépassé. Supprimez des programmes existants.', 'error');
+      } else if (status === 422) {
+        addToast(
+          err.response?.data?.error ?? 'Format de fichier non autorisé ou archive invalide.',
+          'error'
+        );
+      } else {
+        addToast("Erreur lors de l'import.", 'error');
+      }
     }
   };
 
   const handleSubmitExec = async () => {
     try {
       await submitMutation.mutateAsync(createdId);
-      addToast('Programme soumis à l\'exécution.', 'success');
+      addToast("Programme soumis à l'exécution.", 'success');
       navigate(`/programmes/${createdId}`);
     } catch {
       addToast('Erreur lors de la soumission.', 'error');
@@ -105,7 +118,7 @@ export default function ImportPage() {
 
   return (
     <div className="max-w-lg mx-auto">
-      <h2 className="text-xl font-semibold mb-6">Importer un programme C</h2>
+      <h2 className="text-xl font-semibold mb-6">Importer un programme</h2>
 
       <div className="mb-4 bg-white border border-gray-200 rounded-lg p-4">
         <div className="flex justify-between text-sm mb-1">
@@ -114,7 +127,9 @@ export default function ImportPage() {
         </div>
         <div className="w-full bg-gray-200 rounded h-2">
           <div
-            className={`h-full rounded ${usedPct > 85 ? 'bg-[#dc2626]' : usedPct > 65 ? 'bg-[#ea580c]' : 'bg-black'}`}
+            className={`h-full rounded transition-all ${
+              usedPct > 85 ? 'bg-[#dc2626]' : usedPct > 65 ? 'bg-[#ea580c]' : 'bg-black'
+            }`}
             style={{ width: `${usedPct}%` }}
           />
         </div>
@@ -122,7 +137,7 @@ export default function ImportPage() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="bg-white border border-gray-200 rounded-lg p-6 space-y-5">
         <div>
-          <label className="block text-sm font-medium mb-2">Fichier source (.c) *</label>
+          <label className="block text-sm font-medium mb-2">Fichier source *</label>
           <div
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
@@ -137,17 +152,19 @@ export default function ImportPage() {
             ) : (
               <>
                 <p className="text-gray-500 text-sm">Glissez votre fichier ici ou cliquez pour parcourir</p>
-                <p className="text-gray-400 text-xs mt-1">Fichiers .c uniquement</p>
+                <p className="text-gray-400 text-xs mt-1">
+                  Source : .py .c .cpp .h .java .sh .f90 .r • Archive : .zip .tar.gz .tgz
+                </p>
               </>
             )}
           </div>
           <input
             type="file"
-            accept=".c"
+            accept={ACCEPTED_EXTENSIONS}
             ref={fileInputRef}
             className="hidden"
             onChange={(e) => onFileChange(e.target.files)}
-            {...register('file', { required: 'Sélectionnez un fichier .c' })}
+            {...register('file', { required: 'Sélectionnez un fichier source ou une archive.' })}
           />
           {errors.file && <p className="text-[#dc2626] text-xs mt-1">{errors.file.message}</p>}
         </div>

@@ -23,7 +23,8 @@ function Spinner({ label }) {
 
 function SubtasksTab({ programmeId }) {
   const { data, isLoading, isError, refetch } = useProgrammeTasks(programmeId);
-  const tasks = data?.tasks ?? data?.items ?? [];
+  // Le hook retourne directement le tableau de TacheAtomique
+  const tasks = Array.isArray(data) ? data : [];
 
   if (isLoading) return <div className="py-8 flex justify-center"><Spinner label="Chargement…" /></div>;
   if (isError) return (
@@ -53,7 +54,7 @@ function SubtasksTab({ programmeId }) {
               <td className="px-3 py-2 font-mono text-xs">{t.function_name ?? '—'}</td>
               <td className="px-3 py-2 text-gray-500 text-xs">{t.annotation_id ?? '—'}</td>
               <td className="px-3 py-2"><StatusBadge status={t.status} type="task" /></td>
-              <td className="px-3 py-2 text-gray-500 font-mono text-xs">{t.assigned_node ?? t.node_uuid ?? '—'}</td>
+              <td className="px-3 py-2 text-gray-500 font-mono text-xs">{t.worker_node_uuid ?? '—'}</td>
               <td className="px-3 py-2 text-gray-500">{t.attempts != null ? `${t.attempts}/${t.max_attempts ?? '?'}` : '—'}</td>
               <td className="px-3 py-2 text-gray-500">{t.duration_ms ? `${t.duration_ms}ms` : '—'}</td>
             </tr>
@@ -137,7 +138,7 @@ export default function ProgrammeDetailPage() {
     setDownloading(true);
     try {
       const token = getAccessToken();
-      const res = await fetch(`${API_BASE_URL}/api/tasks/${id}/results`, {
+      const res = await fetch(`${API_BASE_URL}/api/tasks/${id}/result`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Erreur de téléchargement');

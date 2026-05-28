@@ -10,7 +10,12 @@ export const useMyTasks = (page = 1, status = '') =>
       const params = { page, per_page: 20 };
       if (status) params.status = status;
       const res = await apiClient.get('/api/tasks/', { params });
-      return res.data;
+      // Retourne { items, total, page, per_page, pages }
+      return res.data.data;
+    },
+    refetchInterval: (query) => {
+      const items = query.state.data?.items ?? [];
+      return items.some((t) => ACTIVE_STATUSES.has(t.status)) ? 3000 : false;
     },
   });
 
@@ -21,7 +26,8 @@ export const useProgramme = (id) =>
       const res = await apiClient.get(`/api/tasks/${id}`, {
         params: { include_progress: true },
       });
-      return res.data;
+      // Retourne l'objet programme avec progress inclus
+      return res.data.data;
     },
     refetchInterval: (query) =>
       ACTIVE_STATUSES.has(query.state.data?.status) ? 3000 : false,
@@ -33,7 +39,8 @@ export const useProgrammeTasks = (id) =>
     queryKey: ['programme-tasks', id],
     queryFn: async () => {
       const res = await apiClient.get(`/api/tasks/${id}/tasks`);
-      return res.data;
+      // Retourne un tableau de TacheAtomique
+      return res.data.data;
     },
     enabled: !!id,
   });
@@ -43,7 +50,8 @@ export const useProgrammeLogs = (id) =>
     queryKey: ['programme-logs', id],
     queryFn: async () => {
       const res = await apiClient.get(`/api/tasks/${id}/logs`);
-      return res.data;
+      // Retourne { logs: "..." }
+      return res.data.data;
     },
     enabled: !!id,
   });

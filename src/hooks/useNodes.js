@@ -6,7 +6,8 @@ export const useClusterStats = () =>
     queryKey: ['cluster-stats'],
     queryFn: async () => {
       const res = await apiClient.get('/api/nodes/stats');
-      return res.data;
+      // Retourne { nodes: { total, actifs, surcharges, en_panne, en_maintenance }, tasks: { en_cours, en_attente } }
+      return res.data.data;
     },
     refetchInterval: 4000,
   });
@@ -18,7 +19,8 @@ export const useNodes = (filters = {}) =>
       const res = await apiClient.get('/api/nodes/', {
         params: { per_page: 50, ...filters },
       });
-      return res.data;
+      // Retourne { items, total, page, per_page, pages }
+      return res.data.data;
     },
     refetchInterval: 4000,
   });
@@ -28,22 +30,24 @@ export const useNode = (uuid) =>
     queryKey: ['node', uuid],
     queryFn: async () => {
       const res = await apiClient.get(`/api/nodes/${uuid}`);
-      return res.data;
+      // Retourne l'objet node avec recent_heartbeats[]
+      return res.data.data;
     },
     refetchInterval: 3000,
     enabled: !!uuid,
   });
 
-export const useNodeHeartbeats = (uuid, limit = 500) =>
+export const useNodeHeartbeats = (uuid, limit = 500, enabled = true) =>
   useQuery({
     queryKey: ['node-heartbeats', uuid, limit],
     queryFn: async () => {
       const res = await apiClient.get(`/api/nodes/${uuid}/heartbeats`, {
         params: { limit },
       });
-      return res.data;
+      // Retourne un tableau de HeartbeatRecord
+      return res.data.data;
     },
-    enabled: !!uuid,
+    enabled: !!uuid && enabled,
   });
 
 export const useNodeTasks = (uuid, status = '') =>
@@ -53,7 +57,8 @@ export const useNodeTasks = (uuid, status = '') =>
       const params = {};
       if (status) params.status = status;
       const res = await apiClient.get(`/api/nodes/${uuid}/tasks`, { params });
-      return res.data;
+      // Retourne un tableau de TacheAtomique
+      return res.data.data;
     },
     enabled: !!uuid,
   });
@@ -61,8 +66,10 @@ export const useNodeTasks = (uuid, status = '') =>
 export const useToggleMaintenance = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (uuid) => apiClient.patch(`/api/nodes/${uuid}/maintenance`),
-    onSuccess: (_, uuid) => {
+    // Accepte { uuid, enable } — envoie le flag enable dans le body
+    mutationFn: ({ uuid, enable }) =>
+      apiClient.patch(`/api/nodes/${uuid}/maintenance`, { enable }),
+    onSuccess: (_, { uuid }) => {
       qc.invalidateQueries({ queryKey: ['nodes'] });
       qc.invalidateQueries({ queryKey: ['node', uuid] });
       qc.invalidateQueries({ queryKey: ['cluster-stats'] });

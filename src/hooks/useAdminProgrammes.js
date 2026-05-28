@@ -10,7 +10,8 @@ export const useAdminProgrammes = (page = 1, status = '') =>
       const params = { page, per_page: 20 };
       if (status) params.status = status;
       const res = await apiClient.get('/api/programmes/', { params });
-      return res.data;
+      // Retourne { items, total, page, per_page, pages }
+      return res.data.data;
     },
     refetchInterval: 5000,
   });
@@ -20,10 +21,22 @@ export const useAdminProgramme = (id) =>
     queryKey: ['admin-programme', id],
     queryFn: async () => {
       const res = await apiClient.get(`/api/programmes/${id}`);
-      return res.data;
+      // Retourne programme + worker_nodes + execution_log
+      return res.data.data;
     },
     refetchInterval: (query) =>
       ACTIVE_STATUSES.has(query.state.data?.status) ? 3000 : false,
+    enabled: !!id,
+  });
+
+export const useAdminProgrammeTasks = (id) =>
+  useQuery({
+    queryKey: ['admin-programme-tasks', id],
+    queryFn: async () => {
+      const res = await apiClient.get(`/api/programmes/${id}/tasks`);
+      // Retourne un tableau de TacheAtomique
+      return res.data.data;
+    },
     enabled: !!id,
   });
 

@@ -19,8 +19,9 @@ export default function AdminProgrammesPage() {
   const { data, isLoading, isError, refetch } = useAdminProgrammes(page, statusFilter);
   const cancelMutation = useCancelProgramme();
 
-  const programmes = data?.programmes ?? data?.items ?? [];
-  const pagination = data?.pagination ?? {};
+  // data = { items, total, page, per_page, pages } après unwrap dans le hook
+  const programmes = data?.items ?? [];
+  const pagination = data ?? {};
 
   const handleCancel = async () => {
     try {

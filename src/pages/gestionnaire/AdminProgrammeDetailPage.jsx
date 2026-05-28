@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useAdminProgramme, useCancelProgramme } from 'src/hooks/useAdminProgrammes';
+import { useAdminProgramme, useAdminProgrammeTasks, useCancelProgramme } from 'src/hooks/useAdminProgrammes';
 import StatusBadge from 'src/components/ui/StatusBadge';
 import ProgressBar from 'src/components/ui/ProgressBar';
 import ConfirmModal from 'src/components/ui/ConfirmModal';
@@ -10,8 +10,13 @@ import { apiClient } from 'src/api/client';
 const TERMINAL = new Set(['termine', 'echec', 'annule']);
 const ACTIVE_STATUSES = new Set(['soumis', 'en_decomposition', 'en_cours']);
 
-function SubtasksSection({ tasks }) {
-  if (!tasks?.length) return <p className="text-gray-400 text-sm py-4 text-center">Aucune sous-tâche.</p>;
+function SubtasksSection({ programmeId }) {
+  const { data, isLoading } = useAdminProgrammeTasks(programmeId);
+  // data est un tableau directement après unwrap du hook
+  const tasks = Array.isArray(data) ? data : [];
+
+  if (isLoading) return <p className="text-gray-400 text-sm py-4 text-center">Chargement…</p>;
+  if (!tasks.length) return <p className="text-gray-400 text-sm py-4 text-center">Aucune sous-tâche.</p>;
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -31,9 +36,9 @@ function SubtasksSection({ tasks }) {
               <td className="px-3 py-2 text-gray-500 text-xs">{t.annotation_id ?? '—'}</td>
               <td className="px-3 py-2"><StatusBadge status={t.status} type="task" /></td>
               <td className="px-3 py-2 font-mono text-xs">
-                {t.assigned_node ? (
-                  <Link to={`/cluster/nodes/${t.assigned_node}`} className="text-black hover:underline">
-                    {t.assigned_node.slice(0, 8)}…
+                {t.worker_node_uuid ? (
+                  <Link to={`/cluster/nodes/${t.worker_node_uuid}`} className="text-black hover:underline">
+                    {t.worker_node_uuid.slice(0, 8)}…
                   </Link>
                 ) : '—'}
               </td>
@@ -77,9 +82,9 @@ export default function AdminProgrammeDetailPage() {
 
   const p = programme ?? {};
   const progress = p.progress ?? {};
-  const pct = progress.percent ?? p.progress_percent ?? null;
-  const done = progress.done ?? p.tasks_done ?? null;
-  const total = progress.total ?? p.tasks_total ?? null;
+  const pct = progress.percent ?? null;
+  const done = progress.done ?? null;
+  const total = progress.total ?? null;
   const workerNodes = p.worker_nodes ?? [];
   const canCancel = !TERMINAL.has(p.status);
 
@@ -93,8 +98,8 @@ export default function AdminProgrammeDetailPage() {
     }
   };
 
-  const subtasks = p.tasks ?? p.subtasks ?? [];
-  const logs = p.execution_log ?? p.logs ?? '';
+  // Les sous-tâches sont chargées via useAdminProgrammeTasks dans SubtasksSection
+  const logs = p.execution_log ?? '';
 
   return (
     <div className="max-w-4xl">
@@ -173,7 +178,7 @@ export default function AdminProgrammeDetailPage() {
         </div>
         <div className="p-4">
           {tab === 'subtasks' ? (
-            <SubtasksSection tasks={subtasks} />
+            <SubtasksSection programmeId={id} />
           ) : (
             <pre className="bg-gray-100 text-xs font-mono p-4 rounded overflow-auto max-h-[500px] whitespace-pre-wrap">
               {logs || 'Aucun log disponible.'}

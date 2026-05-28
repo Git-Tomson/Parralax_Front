@@ -16,11 +16,12 @@ export function AuthProvider({ children }) {
       setIsLoading(false);
       return;
     }
+    // Le token 401 va déclencher l'intercepteur qui rafraîchit automatiquement
     apiClient
       .get('/api/auth/me')
       .then((res) => {
-        setAccessToken(res.data.access_token ?? null);
-        setUser(res.data.user ?? res.data);
+        // /api/auth/me retourne { success, data: { id, username, role, ... } }
+        setUser(res.data.data);
       })
       .catch(() => {
         localStorage.removeItem('parallax_refresh_token');
@@ -30,17 +31,19 @@ export function AuthProvider({ children }) {
 
   const login = async (credentials) => {
     const res = await apiClient.post('/api/auth/login', credentials);
-    setAccessToken(res.data.access_token);
-    localStorage.setItem('parallax_refresh_token', res.data.refresh_token);
-    setUser(res.data.user);
-    return res.data.user;
+    // Login retourne { success, data: { access_token, refresh_token, user } }
+    const { access_token, refresh_token, user: userData } = res.data.data;
+    setAccessToken(access_token);
+    localStorage.setItem('parallax_refresh_token', refresh_token);
+    setUser(userData);
+    return userData;
   };
 
   const logout = async () => {
     try {
       await apiClient.post('/api/auth/logout');
     } catch {
-      // ignore
+      // ignore — token peut déjà être expiré
     }
     setAccessToken(null);
     localStorage.removeItem('parallax_refresh_token');

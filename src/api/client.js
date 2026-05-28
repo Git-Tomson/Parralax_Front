@@ -23,10 +23,13 @@ apiClient.interceptors.response.use(
       const refreshToken = localStorage.getItem('parallax_refresh_token');
       if (refreshToken) {
         try {
-          const res = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
-            refresh_token: refreshToken,
-          });
-          const newToken = res.data.access_token;
+          // Le backend lit le refresh token dans le header Authorization
+          const res = await axios.post(
+            `${API_BASE_URL}/api/auth/refresh`,
+            null,
+            { headers: { Authorization: `Bearer ${refreshToken}` } }
+          );
+          const newToken = res.data.data.access_token;
           setAccessToken(newToken);
           original.headers.Authorization = `Bearer ${newToken}`;
           return apiClient(original);

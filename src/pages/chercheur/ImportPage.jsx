@@ -4,8 +4,13 @@ import { useForm } from 'react-hook-form';
 import { useImportProgramme, useSubmitProgramme } from 'src/hooks/useTasks';
 import { useAuth } from 'src/context/AuthContext';
 import { useToast } from 'src/components/ui/Toast';
+import { Card, CardHeader, CardBody } from 'src/components/ui/Card';
+import {
+  Upload, FileCode, CheckCircle2, Play, Eye, HardDrive,
+  ChevronLeft, AlertCircle, ArrowRight,
+} from 'lucide-react';
 
-const QUOTA_BYTES = 1_073_741_824; // 1 Go
+const QUOTA_BYTES = 1_073_741_824;
 
 const ACCEPTED_EXTENSIONS =
   '.py,.c,.cpp,.h,.hpp,.java,.sh,.f90,.f,.r,.R,.zip,.tar,.gz,.tgz';
@@ -37,10 +42,12 @@ export default function ImportPage() {
     handleSubmit,
     setValue,
     watch,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm();
 
   const selectedFile = watch('file')?.[0];
+  const used = user?.storage_used_bytes ?? 0;
+  const usedPct = Math.min(100, (used / QUOTA_BYTES) * 100);
 
   const onFileChange = (files) => {
     if (!files?.length) return;
@@ -84,32 +91,54 @@ export default function ImportPage() {
     }
   };
 
-  const used = user?.storage_used_bytes ?? 0;
-  const usedPct = Math.min(100, (used / QUOTA_BYTES) * 100);
-
+  // Success state
   if (createdId) {
     return (
       <div className="max-w-lg mx-auto">
-        <div className="bg-white border border-gray-200 rounded-lg p-8 text-center">
-          <div className="text-[#16a34a] text-4xl mb-3">✓</div>
-          <h2 className="text-xl font-semibold mb-2">Programme importé</h2>
-          <p className="text-gray-500 text-sm mb-6">
-            Le fichier a été importé. Voulez-vous le soumettre pour exécution immédiatement ?
-          </p>
-          <div className="flex gap-3 justify-center">
-            <button
-              onClick={handleSubmitExec}
-              disabled={submitMutation.isPending}
-              className="px-5 py-2 bg-black text-white rounded hover:bg-gray-800 disabled:opacity-50"
-            >
-              {submitMutation.isPending ? 'Soumission…' : 'Soumettre pour exécution'}
-            </button>
-            <button
-              onClick={() => navigate(`/programmes/${createdId}`)}
-              className="px-5 py-2 border border-gray-300 rounded hover:bg-gray-100"
-            >
-              Voir mon projet
-            </button>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-gradient-to-br from-emerald-50 to-green-50 p-8 text-center border-b border-emerald-100">
+            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 size={32} className="text-emerald-500" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-900 mb-1">Programme importé !</h2>
+            <p className="text-slate-500 text-sm">
+              Le fichier a été importé avec succès dans le système PARALLAX.
+            </p>
+          </div>
+          <div className="p-6">
+            <p className="text-slate-600 text-sm text-center mb-6">
+              Voulez-vous soumettre ce programme pour exécution sur le cluster ?
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleSubmitExec}
+                disabled={submitMutation.isPending}
+                className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-lg shadow-blue-600/20"
+              >
+                {submitMutation.isPending ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                    Soumission…
+                  </>
+                ) : (
+                  <>
+                    <Play size={15} />
+                    Soumettre pour exécution
+                    <ArrowRight size={15} />
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => navigate(`/programmes/${createdId}`)}
+                className="w-full flex items-center justify-center gap-2 px-5 py-3 border border-slate-200 text-slate-600 rounded-xl text-sm hover:bg-slate-50 transition-colors"
+              >
+                <Eye size={14} />
+                Voir le projet d'abord
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -117,89 +146,181 @@ export default function ImportPage() {
   }
 
   return (
-    <div className="max-w-lg mx-auto">
-      <h2 className="text-xl font-semibold mb-6">Importer un programme</h2>
+    <div className="max-w-xl mx-auto space-y-5">
+      {/* Back link */}
+      <button
+        onClick={() => navigate('/dashboard')}
+        className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-sm transition-colors"
+      >
+        <ChevronLeft size={15} />
+        Retour à mes projets
+      </button>
 
-      <div className="mb-4 bg-white border border-gray-200 rounded-lg p-4">
-        <div className="flex justify-between text-sm mb-1">
-          <span className="text-gray-600">Stockage utilisé</span>
-          <span className="font-medium">{formatBytes(used)} / 1 Go</span>
-        </div>
-        <div className="w-full bg-gray-200 rounded h-2">
-          <div
-            className={`h-full rounded transition-all ${
-              usedPct > 85 ? 'bg-[#dc2626]' : usedPct > 65 ? 'bg-[#ea580c]' : 'bg-black'
-            }`}
-            style={{ width: `${usedPct}%` }}
-          />
-        </div>
+      {/* Page title */}
+      <div>
+        <h1 className="text-xl font-bold text-slate-900">Importer un programme</h1>
+        <p className="text-slate-500 text-sm mt-0.5">
+          Importez un fichier source ou une archive pour l'exécuter sur le cluster PARALLAX
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="bg-white border border-gray-200 rounded-lg p-6 space-y-5">
-        <div>
-          <label className="block text-sm font-medium mb-2">Fichier source *</label>
-          <div
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={(e) => { e.preventDefault(); setIsDragging(false); onFileChange(e.dataTransfer.files); }}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-              isDragging ? 'border-black bg-gray-50' : 'border-gray-300 hover:border-gray-400'
-            }`}
-          >
-            {selectedFile ? (
-              <p className="text-sm font-medium">{selectedFile.name}</p>
-            ) : (
-              <>
-                <p className="text-gray-500 text-sm">Glissez votre fichier ici ou cliquez pour parcourir</p>
-                <p className="text-gray-400 text-xs mt-1">
-                  Source : .py .c .cpp .h .java .sh .f90 .r • Archive : .zip .tar.gz .tgz
-                </p>
-              </>
+      {/* Storage quota */}
+      <Card>
+        <CardBody className="py-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+              <HardDrive size={15} className="text-slate-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium text-slate-600">Stockage utilisé</span>
+                <span className="text-xs font-semibold text-slate-700">
+                  {formatBytes(used)} <span className="text-slate-400 font-normal">/ 1 Go</span>
+                </span>
+              </div>
+              <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className={`h-1.5 rounded-full transition-all ${
+                    usedPct > 85 ? 'bg-red-500' : usedPct > 65 ? 'bg-amber-500' : 'bg-blue-500'
+                  }`}
+                  style={{ width: `${usedPct}%` }}
+                />
+              </div>
+            </div>
+            {usedPct > 85 && (
+              <AlertCircle size={16} className="text-red-500 shrink-0" />
             )}
           </div>
-          <input
-            type="file"
-            accept={ACCEPTED_EXTENSIONS}
-            ref={fileInputRef}
-            className="hidden"
-            onChange={(e) => onFileChange(e.target.files)}
-            {...register('file', { required: 'Sélectionnez un fichier source ou une archive.' })}
-          />
-          {errors.file && <p className="text-[#dc2626] text-xs mt-1">{errors.file.message}</p>}
-        </div>
+        </CardBody>
+      </Card>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Nom du projet *</label>
-          <input
-            {...register('name', {
-              required: 'Champ requis',
-              minLength: { value: 2, message: 'Min 2 caractères' },
-              maxLength: { value: 128, message: 'Max 128 caractères' },
-            })}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-black"
-          />
-          {errors.name && <p className="text-[#dc2626] text-xs mt-1">{errors.name.message}</p>}
-        </div>
+      {/* Upload form */}
+      <Card>
+        <CardHeader title="Nouveau projet" subtitle="Remplissez les informations du programme" />
+        <CardBody>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            {/* Drop zone */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Fichier source <span className="text-red-500">*</span>
+              </label>
+              <div
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  onFileChange(e.dataTransfer.files);
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+                  isDragging
+                    ? 'border-blue-500 bg-blue-50 scale-[1.01]'
+                    : selectedFile
+                    ? 'border-emerald-400 bg-emerald-50'
+                    : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50/30'
+                }`}
+              >
+                {selectedFile ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                      <FileCode size={20} className="text-emerald-600" />
+                    </div>
+                    <p className="text-sm font-semibold text-slate-700">{selectedFile.name}</p>
+                    <p className="text-xs text-slate-400">{formatBytes(selectedFile.size)}</p>
+                    <span className="text-xs text-emerald-600 font-medium">✓ Fichier sélectionné</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
+                      <Upload size={20} className="text-slate-400" />
+                    </div>
+                    <p className="text-slate-600 text-sm font-medium">
+                      Glissez votre fichier ici
+                    </p>
+                    <p className="text-slate-400 text-xs">ou cliquez pour parcourir</p>
+                    <p className="text-slate-300 text-xs mt-1">
+                      .py .c .cpp .java .sh .f90 .r · .zip .tar.gz .tgz
+                    </p>
+                  </div>
+                )}
+              </div>
+              <input
+                type="file"
+                accept={ACCEPTED_EXTENSIONS}
+                ref={fileInputRef}
+                className="hidden"
+                onChange={(e) => onFileChange(e.target.files)}
+                {...register('file', { required: 'Sélectionnez un fichier source ou une archive.' })}
+              />
+              {errors.file && (
+                <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+                  <AlertCircle size={11} />
+                  {errors.file.message}
+                </p>
+              )}
+            </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Description (optionnel)</label>
-          <textarea
-            {...register('description', { maxLength: { value: 512, message: 'Max 512 caractères' } })}
-            rows={3}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-black resize-none"
-          />
-          {errors.description && <p className="text-[#dc2626] text-xs mt-1">{errors.description.message}</p>}
-        </div>
+            {/* Name */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                Nom du projet <span className="text-red-500">*</span>
+              </label>
+              <input
+                {...register('name', {
+                  required: 'Champ requis',
+                  minLength: { value: 2, message: 'Min 2 caractères' },
+                  maxLength: { value: 128, message: 'Max 128 caractères' },
+                })}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 focus:bg-white transition-all"
+                placeholder="Mon programme de calcul"
+              />
+              {errors.name && (
+                <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>
+              )}
+            </div>
 
-        <button
-          type="submit"
-          disabled={isSubmitting || importMutation.isPending}
-          className="w-full bg-black text-white py-2 rounded font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
-        >
-          {importMutation.isPending ? 'Import en cours…' : 'Importer'}
-        </button>
-      </form>
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                Description <span className="text-slate-400 font-normal">(optionnel)</span>
+              </label>
+              <textarea
+                {...register('description', {
+                  maxLength: { value: 512, message: 'Max 512 caractères' },
+                })}
+                rows={3}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 focus:bg-white transition-all resize-none"
+                placeholder="Décrivez votre programme, son objectif, les paramètres d'entrée…"
+              />
+              {errors.description && (
+                <p className="text-red-500 text-xs mt-1">{errors.description.message}</p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={importMutation.isPending}
+              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
+            >
+              {importMutation.isPending ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Import en cours…
+                </>
+              ) : (
+                <>
+                  <Upload size={15} />
+                  Importer le programme
+                </>
+              )}
+            </button>
+          </form>
+        </CardBody>
+      </Card>
     </div>
   );
 }

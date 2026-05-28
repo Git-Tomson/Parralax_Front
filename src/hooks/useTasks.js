@@ -43,6 +43,13 @@ export const useProgrammeTasks = (id) =>
       return res.data.data;
     },
     enabled: !!id,
+    refetchInterval: (query) => {
+      const tasks = Array.isArray(query.state.data) ? query.state.data : [];
+      const hasActive = tasks.some((t) =>
+        ['en_attente', 'assignee', 'en_cours'].includes(t.status)
+      );
+      return hasActive ? 3000 : false;
+    },
   });
 
 export const useProgrammeLogs = (id) =>
@@ -54,6 +61,7 @@ export const useProgrammeLogs = (id) =>
       return res.data.data;
     },
     enabled: !!id,
+    refetchInterval: 4000,
   });
 
 export const useImportProgramme = () => {

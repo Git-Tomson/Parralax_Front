@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   useProgramme, useProgrammeTasks, useProgrammeLogs,
-  useSubmitProgramme, useDeleteProgramme,
+  useSubmitProgramme, useDeleteProgramme, useMasterNode,
 } from 'src/hooks/useTasks';
+import { extractErrorMessage } from 'src/api/client';
 import { API_BASE_URL } from 'src/config/api';
 import { getAccessToken } from 'src/api/authStore';
 import StatusBadge from 'src/components/ui/StatusBadge';
@@ -14,8 +15,8 @@ import { useToast } from 'src/components/ui/Toast';
 import {
   ChevronLeft, Play, Download, Trash2, RefreshCw,
   TerminalSquare, ListChecks, BarChart2, CheckCircle2,
-  XCircle, Clock, Activity, Cpu, Copy, ChevronDown,
-  AlertTriangle, FileCode, Loader, StopCircle,
+  XCircle, Clock, Activity, Cpu, Copy,
+  AlertTriangle, FileCode, Loader, Network, Server,
 } from 'lucide-react';
 
 const ACTIVE_STATUSES = new Set(['soumis', 'en_decomposition', 'en_cours']);
@@ -445,9 +446,12 @@ export default function ProgrammeDetailPage() {
   const [tab, setTab] = useState('overview');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [dispatchInfo, setDispatchInfo] = useState(null); // { master_ip, controller_ip, bytes_sent }
+  const [submitStep, setSubmitStep] = useState(''); // '' | 'discovering' | 'sending' | 'done'
 
   const { data: programme, isLoading, isError, refetch } = useProgramme(id);
   const { data: tasksData } = useProgrammeTasks(id);
+  const { data: masterData } = useMasterNode();
   const submitMutation = useSubmitProgramme();
   const deleteMutation = useDeleteProgramme();
 
@@ -459,13 +463,22 @@ export default function ProgrammeDetailPage() {
   const total = progress.total ?? null;
   const isActive = ACTIVE_STATUSES.has(p.status);
   const isTerminal = TERMINAL_STATUSES.has(p.status);
+  const clusterReady = masterData?.cluster_ready ?? false;
 
   const handleSubmit = async () => {
+    setSubmitStep('discovering');
+    setDispatchInfo(null);
     try {
-      await submitMutation.mutateAsync(id);
-      addToast('Programme soumis au cluster.', 'success');
-    } catch {
-      addToast('Erreur lors de la soumission.', 'error');
+      const res = await submitMutation.mutateAsync(id);
+      // Le backend retourne { programme, dispatch: { master_ip, controller_ip, bytes_sent } }
+      const info = res.data?.data?.dispatch ?? null;
+      setDispatchInfo(info);
+      setSubmitStep('done');
+      const masterIp = info?.master_ip ?? 'maître';
+      addToast(`Programme envoyé à ${masterIp}. Décomposition en cours.`, 'success');
+    } catch (err) {
+      setSubmitStep('');
+      addToast(extractErrorMessage(err), 'error');
     }
   };
 
@@ -474,8 +487,8 @@ export default function ProgrammeDetailPage() {
       await deleteMutation.mutateAsync(id);
       addToast('Programme supprimé.', 'success');
       navigate('/dashboard');
-    } catch {
-      addToast('Erreur lors de la suppression.', 'error');
+    } catch (err) {
+      addToast(extractErrorMessage(err), 'error');
     }
   };
 
@@ -604,6 +617,93 @@ export default function ProgrammeDetailPage() {
             </div>
           )}
 
+          {/* Cluster state indicator (avant soumission) */}
+          {p.status === 'soumis' && (
+            <div className={`mb-3 flex items-center gap-2 px-3 py-2 rounded-lg text-xs border ${
+              clusterReady
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                : 'bg-amber-50 border-amber-200 text-amber-700'
+            }`}>
+              {clusterReady ? (
+                <>
+                  <Server size={12} className="shrink-0" />
+                  Maître disponible :
+                  <span className="font-mono font-semibold">{masterData?.master?.ip ?? '—'}</span>
+                  {masterData?.master?.hostname && (
+                    <span className="text-emerald-600">({masterData.master.hostname})</span>
+                  )}
+                  {masterData?.controller && (
+                    <span className="ml-2 flex items-center gap-1 text-slate-500">
+                      <Network size={10} />
+                      Contrôleur : <span className="font-mono">{masterData.controller.ip}</span>
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <AlertTriangle size={12} className="shrink-0" />
+                  Aucun maître actif — le cluster n'est peut-être pas démarré
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Dispatch progress steps */}
+          {submitMutation.isPending && (
+            <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+              <p className="text-xs font-semibold text-blue-700 mb-2">Envoi en cours…</p>
+              <div className="space-y-1.5">
+                {[
+                  { label: 'Découverte du nœud maître via le contrôleur', active: true },
+                  { label: 'Connexion TCP au maître', active: submitStep === 'sending' || submitStep === 'done' },
+                  { label: 'Transmission du programme (message_t)', active: submitStep === 'done' },
+                ].map((step, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs">
+                    {step.active
+                      ? <Loader size={11} className="text-blue-500 animate-spin shrink-0" />
+                      : <div className="w-2.5 h-2.5 rounded-full border border-slate-300 shrink-0" />
+                    }
+                    <span className={step.active ? 'text-blue-700 font-medium' : 'text-slate-400'}>
+                      {step.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Dispatch result (après soumission réussie) */}
+          {dispatchInfo && (
+            <div className="mb-3 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
+              <p className="text-xs font-semibold text-emerald-700 mb-2 flex items-center gap-1.5">
+                <CheckCircle2 size={12} />
+                Programme transmis au cluster
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <p className="text-slate-400">Nœud maître</p>
+                  <p className="font-mono font-semibold text-slate-700">{dispatchInfo.master_ip ?? '—'}</p>
+                </div>
+                {dispatchInfo.controller_ip && (
+                  <div>
+                    <p className="text-slate-400">Via contrôleur</p>
+                    <p className="font-mono font-semibold text-slate-700">{dispatchInfo.controller_ip}</p>
+                  </div>
+                )}
+                {dispatchInfo.bytes_sent != null && (
+                  <div>
+                    <p className="text-slate-400">Code transmis</p>
+                    <p className="font-semibold text-slate-700">
+                      {dispatchInfo.bytes_sent >= 1024
+                        ? `${(dispatchInfo.bytes_sent / 1024).toFixed(1)} Ko`
+                        : `${dispatchInfo.bytes_sent} o`}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Action buttons */}
           <div className="flex flex-wrap gap-2">
             {p.status === 'soumis' && (
@@ -613,13 +713,13 @@ export default function ProgrammeDetailPage() {
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 shadow-lg shadow-blue-600/20"
               >
                 <Play size={14} />
-                {submitMutation.isPending ? 'Lancement…' : 'Lancer l\'exécution'}
+                {submitMutation.isPending ? 'Envoi en cours…' : 'Lancer l\'exécution'}
               </button>
             )}
             {p.status === 'en_decomposition' && (
               <div className="flex items-center gap-2 text-blue-600 text-sm font-medium px-3 py-2 bg-blue-50 rounded-lg border border-blue-200">
                 <Loader size={14} className="animate-spin" />
-                Analyse en cours…
+                Décomposition en sous-tâches…
               </div>
             )}
             {p.status === 'en_cours' && (

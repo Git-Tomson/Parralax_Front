@@ -82,9 +82,22 @@ export const useSubmitProgramme = () => {
     onSuccess: (_, id) => {
       qc.invalidateQueries({ queryKey: ['tasks'] });
       qc.invalidateQueries({ queryKey: ['programme', id] });
+      qc.invalidateQueries({ queryKey: ['programme-tasks', id] });
     },
   });
 };
+
+// Info sur le maître courant (accessible à tous les rôles)
+export const useMasterNode = () =>
+  useQuery({
+    queryKey: ['master-node'],
+    queryFn: async () => {
+      const res = await apiClient.get('/api/nodes/master');
+      return res.data.data;  // { master, controller, cluster_ready }
+    },
+    refetchInterval: 8000,
+    retry: 1,
+  });
 
 export const useDeleteProgramme = () => {
   const qc = useQueryClient();

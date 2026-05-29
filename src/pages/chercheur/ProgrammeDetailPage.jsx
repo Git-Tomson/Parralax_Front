@@ -470,12 +470,17 @@ export default function ProgrammeDetailPage() {
     setDispatchInfo(null);
     try {
       const res = await submitMutation.mutateAsync(id);
-      // Le backend retourne { programme, dispatch: { master_ip, controller_ip, bytes_sent } }
-      const info = res.data?.data?.dispatch ?? null;
+      const data = res.data?.data ?? {};
+      const skipped = data.dispatch_skipped ?? false;
+      const info = data.dispatch ? { ...data.dispatch, _skipped: skipped } : (skipped ? { _skipped: true } : null);
       setDispatchInfo(info);
       setSubmitStep('done');
-      const masterIp = info?.master_ip ?? 'maître';
-      addToast(`Programme envoyé à ${masterIp}. Décomposition en cours.`, 'success');
+      if (skipped) {
+        addToast(res.data?.message ?? 'Programme soumis (sans dispatch cluster).', 'warning');
+      } else {
+        const masterIp = info?.master_ip ?? 'maître';
+        addToast(`Programme envoyé à ${masterIp}. Décomposition en cours.`, 'success');
+      }
     } catch (err) {
       setSubmitStep('');
       addToast(extractErrorMessage(err), 'error');
@@ -619,65 +624,82 @@ export default function ProgrammeDetailPage() {
 
           {/* Cluster state indicator (avant soumission) */}
           {p.status === 'soumis' && (
-            <div className={`mb-3 flex items-center gap-2 px-3 py-2 rounded-lg text-xs border ${
-              clusterReady
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                : 'bg-amber-50 border-amber-200 text-amber-700'
-            }`}>
-              {clusterReady ? (
-                <>
-                  <Server size={12} className="shrink-0" />
-                  Maître disponible :
-                  <span className="font-mono font-semibold">{masterData?.master?.ip ?? '—'}</span>
-                  {masterData?.master?.hostname && (
-                    <span className="text-emerald-600">({masterData.master.hostname})</span>
-                  )}
-                  {masterData?.controller && (
-                    <span className="ml-2 flex items-center gap-1 text-slate-500">
-                      <Network size={10} />
-                      Contrôleur : <span className="font-mono">{masterData.controller.ip}</span>
-                    </span>
-                  )}
-                </>
-              ) : (
-                <>
-                  <AlertTriangle size={12} className="shrink-0" />
-                  Aucun maître actif — le cluster n'est peut-être pas démarré
-                </>
-              )}
-            </div>
+            clusterReady ? (
+              <div className="mb-3 flex flex-wrap items-center gap-3 px-3 py-2 rounded-lg text-xs bg-emerald-50 border border-emerald-200 text-emerald-700">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Cluster prêt
+                </span>
+                <span className="flex items-center gap-1">
+                  <Server size={11} />
+                  Maître : <span className="font-mono font-semibold ml-1">{masterData?.master?.ip}</span>
+                  {masterData?.master?.hostname && <span className="text-emerald-600 ml-1">({masterData.master.hostname})</span>}
+                </span>
+                {masterData?.controller && (
+                  <span className="flex items-center gap-1 text-emerald-600">
+                    <Network size={11} />
+                    Contrôleur : <span className="font-mono ml-1">{masterData.controller.ip}</span>
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-start gap-2 mb-2">
+                  <AlertTriangle size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">
+                      Aucun nœud maître détecté dans le cluster
+                    </p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      La soumission fonctionnera quand même — le dispatch TCP sera ignoré jusqu'à ce que le cluster soit configuré.
+                    </p>
+                  </div>
+                </div>
+                <details className="text-xs">
+                  <summary className="text-slate-500 cursor-pointer hover:text-slate-700 select-none">
+                    Comment tester avec les simulateurs ?
+                  </summary>
+                  <div className="mt-2 bg-slate-900 rounded-lg p-3 font-mono text-slate-300 space-y-1">
+                    <p className="text-slate-500"># Terminal 1 — contrôleur</p>
+                    <p>python3 tools/controller_sim.py</p>
+                    <p className="text-slate-500 mt-1"># Terminal 2 — maître</p>
+                    <p>python3 tools/master_sim.py</p>
+                    <p className="text-slate-500 mt-1"># Terminal 3 — enregistrer &amp; tester</p>
+                    <p>python3 tools/test_e2e.py</p>
+                  </div>
+                </details>
+              </div>
+            )
           )}
 
           {/* Dispatch progress steps */}
           {submitMutation.isPending && (
             <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-              <p className="text-xs font-semibold text-blue-700 mb-2">Envoi en cours…</p>
+              <p className="text-xs font-semibold text-blue-700 mb-2 flex items-center gap-1.5">
+                <Loader size={11} className="animate-spin" />
+                Soumission en cours…
+              </p>
               <div className="space-y-1.5">
                 {[
-                  { label: 'Découverte du nœud maître via le contrôleur', active: true },
-                  { label: 'Connexion TCP au maître', active: submitStep === 'sending' || submitStep === 'done' },
-                  { label: 'Transmission du programme (message_t)', active: submitStep === 'done' },
-                ].map((step, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs">
-                    {step.active
-                      ? <Loader size={11} className="text-blue-500 animate-spin shrink-0" />
-                      : <div className="w-2.5 h-2.5 rounded-full border border-slate-300 shrink-0" />
-                    }
-                    <span className={step.active ? 'text-blue-700 font-medium' : 'text-slate-400'}>
-                      {step.label}
-                    </span>
+                  { label: 'Découverte du maître via le contrôleur' },
+                  { label: 'Connexion TCP au nœud maître' },
+                  { label: 'Transmission du programme (message_t)' },
+                ].map((s, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs text-blue-600">
+                    <Loader size={10} className="animate-spin shrink-0" />
+                    <span>{s.label}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Dispatch result (après soumission réussie) */}
-          {dispatchInfo && (
+          {/* Dispatch result — succès avec dispatch réel */}
+          {dispatchInfo && !dispatchInfo._skipped && (
             <div className="mb-3 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
               <p className="text-xs font-semibold text-emerald-700 mb-2 flex items-center gap-1.5">
                 <CheckCircle2 size={12} />
-                Programme transmis au cluster
+                Programme transmis au cluster par TCP
               </p>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
@@ -701,6 +723,19 @@ export default function ProgrammeDetailPage() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Dispatch skippé — soumis sans cluster */}
+          {dispatchInfo?._skipped && (
+            <div className="mb-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+              <p className="text-xs font-semibold text-amber-700 flex items-center gap-1.5">
+                <AlertTriangle size={12} />
+                Soumis sans dispatch cluster (mode développement)
+              </p>
+              <p className="text-xs text-amber-600 mt-0.5">
+                Le programme est en file d'attente. Lancez les simulateurs pour tester le dispatch TCP.
+              </p>
             </div>
           )}
 

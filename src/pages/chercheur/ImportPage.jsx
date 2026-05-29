@@ -45,6 +45,11 @@ export default function ImportPage() {
     formState: { errors },
   } = useForm();
 
+  // Sépare le ref de react-hook-form pour le combiner avec fileInputRef
+  const { ref: rhfRef, ...fileRegisterRest } = register('file', {
+    required: 'Sélectionnez un fichier source ou une archive.',
+  });
+
   const selectedFile = watch('file')?.[0];
   const used = user?.storage_used_bytes ?? 0;
   const usedPct = Math.min(100, (used / QUOTA_BYTES) * 100);
@@ -248,10 +253,10 @@ export default function ImportPage() {
               <input
                 type="file"
                 accept={ACCEPTED_EXTENSIONS}
-                ref={fileInputRef}
+                ref={(e) => { rhfRef(e); fileInputRef.current = e; }}
                 className="hidden"
                 onChange={(e) => onFileChange(e.target.files)}
-                {...register('file', { required: 'Sélectionnez un fichier source ou une archive.' })}
+                {...fileRegisterRest}
               />
               {errors.file && (
                 <p className="text-red-500 text-xs mt-1 flex items-center gap-1">

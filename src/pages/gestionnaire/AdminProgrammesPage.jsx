@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAdminProgrammes, useCancelProgramme } from 'src/hooks/useAdminProgrammes';
+import { useAdminProgrammes, useCancelProgramme, useDeleteAdminProgramme } from 'src/hooks/useAdminProgrammes';
 import StatusBadge from 'src/components/ui/StatusBadge';
 import ProgressBar from 'src/components/ui/ProgressBar';
 import Pagination from 'src/components/ui/Pagination';
@@ -9,7 +9,7 @@ import { Card, CardHeader, CardBody } from 'src/components/ui/Card';
 import { useToast } from 'src/components/ui/Toast';
 import {
   RefreshCw, Eye, XCircle, FileCode2, Search, StopCircle,
-  ChevronRight,
+  ChevronRight, Trash2,
 } from 'lucide-react';
 
 const TERMINAL = new Set(['termine', 'echec', 'annule']);
@@ -26,9 +26,11 @@ export default function AdminProgrammesPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
   const [cancelTarget, setCancelTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const { data, isLoading, isError, refetch } = useAdminProgrammes(page, statusFilter);
   const cancelMutation = useCancelProgramme();
+  const deleteMutation = useDeleteAdminProgramme();
 
   const allProgrammes = data?.items ?? [];
   const programmes = search
@@ -47,6 +49,17 @@ export default function AdminProgrammesPage() {
       addToast("Erreur lors de l'annulation.", 'error');
     } finally {
       setCancelTarget(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteMutation.mutateAsync(deleteTarget);
+      addToast('Programme supprimé.', 'success');
+    } catch {
+      addToast('Erreur lors de la suppression.', 'error');
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -145,6 +158,7 @@ export default function AdminProgrammesPage() {
                 {programmes.map((prog) => {
                   const pct = prog.progress?.percent ?? prog.progress_percent ?? null;
                   const canCancel = !TERMINAL.has(prog.status);
+                  const canDelete = TERMINAL.has(prog.status);
                   return (
                     <tr
                       key={prog.id}
@@ -203,6 +217,15 @@ export default function AdminProgrammesPage() {
                               Annuler
                             </button>
                           )}
+                          {canDelete && (
+                            <button
+                              onClick={() => setDeleteTarget(prog.id)}
+                              className="flex items-center gap-1.5 px-2.5 py-1.5 border border-red-200 text-red-500 rounded-lg text-xs hover:bg-red-50 transition-colors"
+                              title="Supprimer"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -232,6 +255,17 @@ export default function AdminProgrammesPage() {
         message="L'exécution sera interrompue. Les tâches en cours seront abandonnées."
         onConfirm={handleCancel}
         onCancel={() => setCancelTarget(null)}
+      />
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Supprimer le programme"
+        message="Cette action est irréversible. Le programme et toutes ses données seront définitivement supprimés."
+        confirmLabel="Supprimer"
+        variant="danger"
+        isPending={deleteMutation.isPending}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
       />
     </div>
   );

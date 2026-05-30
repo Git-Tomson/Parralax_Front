@@ -50,3 +50,22 @@ export const useCancelProgramme = () => {
     },
   });
 };
+
+export const useDeleteAdminProgramme = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => apiClient.delete(`/api/programmes/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-programmes'] }),
+  });
+};
+
+export const useRetryAdminProgramme = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => apiClient.post(`/api/programmes/${id}/submit`),
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ['admin-programmes'] });
+      qc.invalidateQueries({ queryKey: ['admin-programme', id] });
+    },
+  });
+};

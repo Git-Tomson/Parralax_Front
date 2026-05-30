@@ -3,7 +3,10 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import {
   useAdminProgramme, useAdminProgrammeTasks, useCancelProgramme,
+  useDeleteAdminProgramme, useRetryAdminProgramme,
 } from 'src/hooks/useAdminProgrammes';
+import { API_BASE_URL } from 'src/config/api';
+import { getAccessToken } from 'src/api/authStore';
 import { extractErrorMessage } from 'src/api/client';
 import StatusBadge from 'src/components/ui/StatusBadge';
 import ProgressBar from 'src/components/ui/ProgressBar';
@@ -14,6 +17,7 @@ import {
   ChevronLeft, TerminalSquare, ListChecks, BarChart2, CheckCircle2,
   XCircle, Loader, RefreshCw, StopCircle, Copy, FileCode,
   Clock, Activity, AlertTriangle, Server, Network,
+  Download, Trash2, Play,
 } from 'lucide-react';
 
 const TERMINAL_STATUSES = new Set(['termine', 'echec', 'annule']);
@@ -315,10 +319,14 @@ export default function AdminProgrammeDetailPage() {
   const { addToast } = useToast();
   const [tab, setTab] = useState('overview');
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const { data: programme, isLoading, isError, refetch } = useAdminProgramme(id);
   const { data: tasksData } = useAdminProgrammeTasks(id);
   const cancelMutation = useCancelProgramme();
+  const deleteMutation = useDeleteAdminProgramme();
+  const retryMutation = useRetryAdminProgramme();
 
   const p = programme ?? {};
   const tasks = Array.isArray(tasksData) ? tasksData : [];
@@ -337,6 +345,51 @@ export default function AdminProgrammeDetailPage() {
     } catch (err) {
       addToast(extractErrorMessage(err), 'error');
       setShowCancelModal(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteMutation.mutateAsync(id);
+      addToast('Programme supprimé.', 'success');
+      setShowDeleteModal(false);
+      navigate('/cluster/programmes');
+    } catch (err) {
+      addToast(extractErrorMessage(err), 'error');
+      setShowDeleteModal(false);
+    }
+  };
+
+  const handleRetry = async () => {
+    try {
+      await retryMutation.mutateAsync(id);
+      addToast('Programme soumis à nouveau.', 'success');
+    } catch (err) {
+      addToast(extractErrorMessage(err), 'error');
+    }
+  };
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const token = getAccessToken();
+      const res = await fetch(`${API_BASE_URL}/api/programmes/${id}/result`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Erreur');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `resultats_${p.name ?? id}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      addToast('Erreur lors du téléchargement.', 'error');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -418,16 +471,47 @@ export default function AdminProgrammeDetailPage() {
           )}
 
           {/* Actions */}
-          {canCancel && (
-            <button
-              onClick={() => setShowCancelModal(true)}
-              disabled={cancelMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2 border border-orange-200 text-orange-600 rounded-lg text-sm hover:bg-orange-50 transition-colors disabled:opacity-50"
-            >
-              <StopCircle size={14} />
-              Annuler l'exécution
-            </button>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {canCancel && (
+              <button
+                onClick={() => setShowCancelModal(true)}
+                disabled={cancelMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2 border border-orange-200 text-orange-600 rounded-lg text-sm hover:bg-orange-50 transition-colors disabled:opacity-50"
+              >
+                <StopCircle size={14} />
+                {cancelMutation.isPending ? 'Annulation…' : 'Annuler l\'exécution'}
+              </button>
+            )}
+            {p.status === 'termine' && (
+              <button
+                onClick={handleDownload}
+                disabled={downloading}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 shadow-lg shadow-emerald-600/20"
+              >
+                <Download size={14} />
+                {downloading ? 'Téléchargement…' : 'Télécharger les résultats'}
+              </button>
+            )}
+            {p.status === 'echec' && (
+              <button
+                onClick={handleRetry}
+                disabled={retryMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-semibold hover:bg-orange-700 disabled:opacity-50"
+              >
+                <Play size={14} />
+                {retryMutation.isPending ? 'Soumission…' : 'Réessayer'}
+              </button>
+            )}
+            {TERMINAL_STATUSES.has(p.status) && (
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="flex items-center gap-2 px-4 py-2 border border-red-200 text-red-500 rounded-lg text-sm hover:bg-red-50 transition-colors"
+              >
+                <Trash2 size={14} />
+                Supprimer
+              </button>
+            )}
+          </div>
         </CardBody>
       </Card>
 
@@ -464,6 +548,17 @@ export default function AdminProgrammeDetailPage() {
         isPending={cancelMutation.isPending}
         onConfirm={handleCancel}
         onCancel={() => setShowCancelModal(false)}
+      />
+
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        title="Supprimer le programme"
+        message="Cette action est irréversible. Le programme et toutes ses données seront définitivement supprimés."
+        confirmLabel="Supprimer"
+        variant="danger"
+        isPending={deleteMutation.isPending}
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteModal(false)}
       />
     </div>
   );

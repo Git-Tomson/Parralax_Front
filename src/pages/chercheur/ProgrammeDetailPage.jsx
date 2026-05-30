@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   useProgramme, useProgrammeTasks, useProgrammeLogs,
-  useSubmitProgramme, useDeleteProgramme, useMasterNode,
+  useSubmitProgramme, useDeleteProgramme, useCancelOwnProgramme, useMasterNode,
 } from 'src/hooks/useTasks';
 import { extractErrorMessage } from 'src/api/client';
 import { API_BASE_URL } from 'src/config/api';
@@ -13,7 +13,7 @@ import ConfirmModal from 'src/components/ui/ConfirmModal';
 import { Card, CardHeader, CardBody } from 'src/components/ui/Card';
 import { useToast } from 'src/components/ui/Toast';
 import {
-  ChevronLeft, Play, Download, Trash2, RefreshCw,
+  ChevronLeft, Play, Download, Trash2, RefreshCw, StopCircle,
   TerminalSquare, ListChecks, BarChart2, CheckCircle2,
   XCircle, Clock, Activity, Cpu, Copy,
   AlertTriangle, FileCode, Loader, Network, Server,
@@ -445,6 +445,7 @@ export default function ProgrammeDetailPage() {
   const { addToast } = useToast();
   const [tab, setTab] = useState('overview');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [dispatchInfo, setDispatchInfo] = useState(null); // { master_ip, controller_ip, bytes_sent }
   const [submitStep, setSubmitStep] = useState(''); // '' | 'discovering' | 'sending' | 'done'
@@ -453,6 +454,7 @@ export default function ProgrammeDetailPage() {
   const { data: tasksData } = useProgrammeTasks(id);
   const { data: masterData } = useMasterNode();
   const submitMutation = useSubmitProgramme();
+  const cancelMutation = useCancelOwnProgramme();
   const deleteMutation = useDeleteProgramme();
 
   const p = programme ?? {};
@@ -494,6 +496,17 @@ export default function ProgrammeDetailPage() {
       navigate('/dashboard');
     } catch (err) {
       addToast(extractErrorMessage(err), 'error');
+    }
+  };
+
+  const handleCancel = async () => {
+    try {
+      await cancelMutation.mutateAsync(id);
+      addToast('Programme annulé.', 'success');
+    } catch (err) {
+      addToast(extractErrorMessage(err), 'error');
+    } finally {
+      setShowCancelModal(false);
     }
   };
 
@@ -763,6 +776,16 @@ export default function ProgrammeDetailPage() {
                 Exécution distribuée en cours
               </div>
             )}
+            {(p.status === 'en_cours' || p.status === 'en_decomposition') && (
+              <button
+                onClick={() => setShowCancelModal(true)}
+                disabled={cancelMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2 border border-red-200 text-red-500 rounded-lg text-sm hover:bg-red-50 transition-colors disabled:opacity-50"
+              >
+                <StopCircle size={14} />
+                {cancelMutation.isPending ? 'Annulation…' : 'Stopper l\'exécution'}
+              </button>
+            )}
             {p.status === 'termine' && (
               <button
                 onClick={handleDownload}
@@ -828,6 +851,16 @@ export default function ProgrammeDetailPage() {
         {tab === 'tasks' && <TasksTab programmeId={id} isActive={isActive} />}
         {tab === 'logs' && <LogsTab programmeId={id} isActive={isActive} />}
       </Card>
+
+      <ConfirmModal
+        isOpen={showCancelModal}
+        title="Stopper l'exécution"
+        message="L'exécution sera interrompue. Le programme passera en statut 'annulé' mais restera accessible. Vous pourrez le resoumettre ultérieurement."
+        confirmLabel="Stopper"
+        variant="warning"
+        onConfirm={handleCancel}
+        onCancel={() => setShowCancelModal(false)}
+      />
 
       <ConfirmModal
         isOpen={showDeleteModal}

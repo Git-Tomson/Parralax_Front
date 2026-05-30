@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMyTasks, useDeleteProgramme } from 'src/hooks/useTasks';
+import { useMyTasks, useDeleteProgramme, useCancelOwnProgramme } from 'src/hooks/useTasks';
 import { useAuth } from 'src/context/AuthContext';
 import StatusBadge from 'src/components/ui/StatusBadge';
 import ProgressBar from 'src/components/ui/ProgressBar';
@@ -10,7 +10,7 @@ import StatCard from 'src/components/ui/StatCard';
 import { Card, CardHeader, CardBody } from 'src/components/ui/Card';
 import { useToast } from 'src/components/ui/Toast';
 import {
-  Plus, RefreshCw, Search, Trash2, Eye, ChevronRight,
+  Plus, RefreshCw, Search, Trash2, Eye, StopCircle,
   FolderCode, CheckCircle2, Clock, XCircle, Loader,
   Upload, BarChart2,
 } from 'lucide-react';
@@ -63,9 +63,11 @@ export default function ChercheurDashboard() {
   const [statusFilter, setStatusFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
 
   const { data, isLoading, isError, refetch } = useMyTasks(page, statusFilter);
   const deleteMutation = useDeleteProgramme();
+  const cancelMutation = useCancelOwnProgramme();
 
   const handleDelete = async () => {
     try {
@@ -75,6 +77,17 @@ export default function ChercheurDashboard() {
       addToast('Erreur lors de la suppression.', 'error');
     } finally {
       setDeleteTarget(null);
+    }
+  };
+
+  const handleCancel = async () => {
+    try {
+      await cancelMutation.mutateAsync(cancelTarget);
+      addToast('Programme annulé.', 'success');
+    } catch {
+      addToast("Erreur lors de l'annulation.", 'error');
+    } finally {
+      setCancelTarget(null);
     }
   };
 
@@ -222,7 +235,8 @@ export default function ChercheurDashboard() {
                 {items.map((task) => {
                   const pct = task.progress?.percent ?? task.progress_percent ?? null;
                   const canDelete = TERMINAL.has(task.status) || task.status === 'soumis';
-                  const isRunning = task.status === 'en_cours' || task.status === 'en_decomposition';
+                  const canCancel = task.status === 'en_cours' || task.status === 'en_decomposition';
+                  const isRunning = canCancel;
 
                   return (
                     <tr
@@ -291,10 +305,20 @@ export default function ChercheurDashboard() {
                             <Eye size={12} />
                             Voir
                           </button>
+                          {canCancel && (
+                            <button
+                              onClick={() => setCancelTarget(task.id)}
+                              className="flex items-center gap-1.5 px-2.5 py-1.5 border border-orange-200 text-orange-500 rounded-lg text-xs hover:bg-orange-50 transition-colors"
+                              title="Stopper l'exécution"
+                            >
+                              <StopCircle size={12} />
+                            </button>
+                          )}
                           {canDelete && (
                             <button
                               onClick={() => setDeleteTarget(task.id)}
                               className="flex items-center gap-1.5 px-2.5 py-1.5 border border-red-200 text-red-500 rounded-lg text-xs hover:bg-red-50 transition-colors"
+                              title="Supprimer"
                             >
                               <Trash2 size={12} />
                             </button>
@@ -321,6 +345,16 @@ export default function ChercheurDashboard() {
           </div>
         )}
       </Card>
+
+      <ConfirmModal
+        isOpen={!!cancelTarget}
+        title="Stopper l'exécution"
+        message="L'exécution sera interrompue. Le programme passera en statut 'annulé' mais restera accessible dans votre liste."
+        confirmLabel="Stopper"
+        variant="warning"
+        onConfirm={handleCancel}
+        onCancel={() => setCancelTarget(null)}
+      />
 
       <ConfirmModal
         isOpen={!!deleteTarget}

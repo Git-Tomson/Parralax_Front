@@ -166,8 +166,8 @@ export default function AppLayout() {
                 <SidebarLink to="/cluster" end icon={<Server size={15} />}>Vue d'ensemble</SidebarLink>
                 <SidebarLink to="/cluster/programmes" icon={<FileCode2 size={15} />}>Programmes</SidebarLink>
               </SidebarSection>
-              <SidebarSection title="Monitoring">
-                <SidebarLink to="/cluster" icon={<Activity size={15} />}>Activité</SidebarLink>
+              <SidebarSection title="Administration">
+                <SidebarLink to="/cluster/programmes" icon={<Activity size={15} />}>Programmes</SidebarLink>
               </SidebarSection>
             </>
           ) : (

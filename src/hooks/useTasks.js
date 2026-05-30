@@ -99,6 +99,18 @@ export const useMasterNode = () =>
     retry: 1,
   });
 
+export const useCancelOwnProgramme = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => apiClient.post(`/api/tasks/${id}/cancel`),
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['programme', id] });
+      qc.invalidateQueries({ queryKey: ['programme-tasks', id] });
+    },
+  });
+};
+
 export const useDeleteProgramme = () => {
   const qc = useQueryClient();
   return useMutation({

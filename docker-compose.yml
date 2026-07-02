@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  front-parallax:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: front-parallax-app
+    ports:
+      # Map le port 80 de la VM vers le port 80 du conteneur
+      - "80:80"
+    
+    # CRITIQUE: Cette politique de redémarrage (restart) s'assure que le conteneur démarre tout seul :
+    # 1. Quand vous quittez la connexion SSH, il reste allumé
+    # 2. Quand la VM redémarre complètement (boot/reboot), Docker daemon relancera immédiatement cette application.
+    # 3. S'il crash, il redémarrera (sauf s'il a été arrêté manuellement via docker compose down ou stop).
+    restart: unless-stopped 
+    
+    environment:
+      # Optionnel : variables d'environnement utiles pour spécifier qu'on est en prod
+      - NODE_ENV=production
+    
+    # Note mono-coeur: Docker va automatiquement gérer la limite CPU. 
+    # Pour un single-core, Nginx en image alpine géré par ce compose est le meilleur choix d'architecture (overhead quasi nul).
